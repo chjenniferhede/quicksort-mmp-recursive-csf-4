@@ -13,27 +13,73 @@ void swap( int64_t *arr, unsigned long i, unsigned long j );
 unsigned long partition( int64_t *arr, unsigned long start, unsigned long end );
 int quicksort( int64_t *arr, unsigned long start, unsigned long end, unsigned long par_threshold );
 
-// TODO: declare additional helper functions if needed
+// -- Helper functions //
+// check for file format
+int has_bin_extension(const char* filename) { 
+  size_t n = strlen(filename); 
+  return n >= 4 && strcmp(filename + n - 4, ".bin") == 0;
+}
 
 int main( int argc, char **argv ) {
+
+  // example usage: ./parsort test_data_1.bin 65536, first argument filename, secoond parallelization threshold
   unsigned long par_threshold;
+  // check commandline arguments
   if ( argc != 3 || sscanf( argv[2], "%lu", &par_threshold ) != 1 ) {
     fprintf( stderr, "Usage: parsort <file> <par threshold>\n" );
     exit( 1 );
   }
 
-  int fd;
+  char* filename = argv[1]; 
+  if (!has_bin_extention(filename)) { 
+    fprintf( stderr, "Usage: file has to be a .bin file");
+    exit( 1 );
+  }
 
-  // open the named file
-  // TODO: open the named file
+  // Use the open syscall to open the file in read-write mode and get a file descriptor:
+  int fd = open(filename, O_RDWR);
+  if (fd < 0) {
+    fprintf( stderr, "File failed to open with syscall open"); 
+    exit( 1 );
+  }
 
   // determine file size and number of elements
   unsigned long file_size, num_elements;
-  // TODO: determine the file size and number of elements
+  struct stat statbuf;
+  // fstat is syscall that gets file status
+  int rc = fstat( fd, &statbuf );
+  if ( rc != 0 ) {
+      // handle fstat error and exit
+      fprintf( stderr, "Failed to get the file status with syscall fstat");
+      exit( 1 );
+  } 
+  // statbuf.st_size indicates the number of bytes in the file
+  file_size = statbuf.st_size; 
+  if (file_size % sizeof(int64_t) != 0) { 
+    fprintf( stderr, "File malformed, should be all int64_t"); 
+    exit( 1 );
+  }
+  num_elements = file_size / sizeof(int64_t);
 
-  // mmap the file data
+  // mmap the file data, syscall that maps a file into memory, so that we can treat the file data as an array in memory
   int64_t *arr;
-  // TODO: mmap the file data
+  arr = mmap( NULL, file_size, PROT_READ | PROT_WRITE,
+            MAP_SHARED, fd, 0 );
+  close( fd ); // file can be closed now
+  if ( arr == MAP_FAILED ) {
+    fprintf( stderr, "Failed to map the file data with syscall mmap");
+    exit( 1 );
+  }
+  /* Passing in NULL for the requested mapping address gives mmap 
+   complete freedom to choose any address in memory as the base address
+   for the mapping. Since we don’t care where the file’s data ends up 
+   in memory, so long as we can access it, this is what we want. 
+   Similarly, we want to map the entire file, so we set the offset to zero.*/
+
+  // *arr now behaves like a standard array of int64_t.
+  // Be careful though! Going off the end of the array will
+  // silently extend the file, which can rapidly lead to
+  // disk space depletion!
 
   // Sort the data!
   int success;
@@ -44,7 +90,7 @@ int main( int argc, char **argv ) {
   }
 
   // Unmap the file data
-  // TODO: unmap the file data
+  munmap( arr, file_size );
 
   return 0;
 }
