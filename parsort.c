@@ -14,8 +14,6 @@ typedef struct {
   int waited_success;
 } Child;
 
-int has_bin_extension(const char* filename);
-
 Child quicksort_subproc( int64_t *arr, unsigned long start, unsigned long end, unsigned long par_threshold );
 void quicksort_wait( Child *child );
 int quicksort_check_success( Child *child );
@@ -23,13 +21,6 @@ int compare( const void *left, const void *right );
 void swap( int64_t *arr, unsigned long i, unsigned long j );
 unsigned long partition( int64_t *arr, unsigned long start, unsigned long end );
 int quicksort( int64_t *arr, unsigned long start, unsigned long end, unsigned long par_threshold );
-
-// -- Helper functions //
-// check for file format
-int has_bin_extension(const char* filename) {
-  size_t n = strlen(filename);
-  return n >= 4 && strcmp(filename + n - 4, ".bin") == 0;
-}
 
 int main( int argc, char **argv ) {
 
@@ -42,10 +33,6 @@ int main( int argc, char **argv ) {
   }
 
   char* filename = argv[1];
-  if (!has_bin_extension(filename)) {
-    fprintf( stderr, "Usage: file has to be a .bin file");
-    exit( 1 );
-  }
 
   // Use the open syscall to open the file in read-write mode and get a file descriptor:
   int fd = open(filename, O_RDWR);
