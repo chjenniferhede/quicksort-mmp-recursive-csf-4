@@ -242,6 +242,8 @@ int quicksort( int64_t *arr, unsigned long start, unsigned long end, unsigned lo
 Child quicksort_subproc( int64_t *arr, unsigned long start, unsigned long end, unsigned long par_threshold ) {
   pid_t child_pid = fork();
   Child child;
+  child.created_success = 0; 
+  child.waited_success = 0;
   // The fork is successful
   // if this is child process: 
   if ( child_pid == 0 ) {
