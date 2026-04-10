@@ -37,7 +37,7 @@ int main( int argc, char **argv ) {
   // Use the open syscall to open the file in read-write mode and get a file descriptor:
   int fd = open(filename, O_RDWR);
   if (fd < 0) {
-    fprintf( stderr, "File failed to open with syscall open");
+    fprintf( stderr, "File failed to open with syscall open\n");
     exit( 1 );
   }
 
@@ -48,13 +48,13 @@ int main( int argc, char **argv ) {
   int rc = fstat( fd, &statbuf );
   if ( rc != 0 ) {
       // handle fstat error and exit
-      fprintf( stderr, "Failed to get the file status with syscall fstat");
+      fprintf( stderr, "Failed to get the file status with syscall fstat\n");
       exit( 1 );
   }
   // statbuf.st_size indicates the number of bytes in the file
   file_size = statbuf.st_size;
   if (file_size % sizeof(int64_t) != 0) {
-    fprintf( stderr, "File malformed, should be all int64_t");
+    fprintf( stderr, "File malformed, should be all int64_t\n");
     exit( 1 );
   }
   num_elements = file_size / sizeof(int64_t);
@@ -65,7 +65,7 @@ int main( int argc, char **argv ) {
             MAP_SHARED, fd, 0 );
   close( fd ); // file can be closed now
   if ( arr == MAP_FAILED ) {
-    fprintf( stderr, "Failed to map the file data with syscall mmap");
+    fprintf( stderr, "Failed to map the file data with syscall mmap\n");
     exit( 1 );
   }
   /* Passing in NULL for the requested mapping address gives mmap
@@ -304,7 +304,3 @@ int quicksort_check_success( Child *child ) {
   }
   return 1;
 }
-
-
-
-// TODO: define additional helper functions if needed
