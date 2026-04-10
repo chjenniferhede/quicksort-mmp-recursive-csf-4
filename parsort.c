@@ -8,6 +8,17 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 
+typedef struct { 
+  int created_success; 
+  pid_t pid;
+  int waited_success;
+} Child;
+
+int has_bin_extension(const char* filename);
+
+Child quicksort_subproc( int64_t *arr, unsigned long start, unsigned long end, unsigned long par_threshold );
+void quicksort_wait( Child *child );
+int quicksort_check_success( Child *child );
 int compare( const void *left, const void *right );
 void swap( int64_t *arr, unsigned long i, unsigned long j );
 unsigned long partition( int64_t *arr, unsigned long start, unsigned long end );
@@ -15,8 +26,8 @@ int quicksort( int64_t *arr, unsigned long start, unsigned long end, unsigned lo
 
 // -- Helper functions //
 // check for file format
-int has_bin_extension(const char* filename) { 
-  size_t n = strlen(filename); 
+int has_bin_extension(const char* filename) {
+  size_t n = strlen(filename);
   return n >= 4 && strcmp(filename + n - 4, ".bin") == 0;
 }
 
@@ -30,8 +41,8 @@ int main( int argc, char **argv ) {
     exit( 1 );
   }
 
-  char* filename = argv[1]; 
-  if (!has_bin_extention(filename)) { 
+  char* filename = argv[1];
+  if (!has_bin_extension(filename)) {
     fprintf( stderr, "Usage: file has to be a .bin file");
     exit( 1 );
   }
@@ -39,7 +50,7 @@ int main( int argc, char **argv ) {
   // Use the open syscall to open the file in read-write mode and get a file descriptor:
   int fd = open(filename, O_RDWR);
   if (fd < 0) {
-    fprintf( stderr, "File failed to open with syscall open"); 
+    fprintf( stderr, "File failed to open with syscall open");
     exit( 1 );
   }
 
@@ -52,11 +63,11 @@ int main( int argc, char **argv ) {
       // handle fstat error and exit
       fprintf( stderr, "Failed to get the file status with syscall fstat");
       exit( 1 );
-  } 
+  }
   // statbuf.st_size indicates the number of bytes in the file
-  file_size = statbuf.st_size; 
-  if (file_size % sizeof(int64_t) != 0) { 
-    fprintf( stderr, "File malformed, should be all int64_t"); 
+  file_size = statbuf.st_size;
+  if (file_size % sizeof(int64_t) != 0) {
+    fprintf( stderr, "File malformed, should be all int64_t");
     exit( 1 );
   }
   num_elements = file_size / sizeof(int64_t);
@@ -70,10 +81,10 @@ int main( int argc, char **argv ) {
     fprintf( stderr, "Failed to map the file data with syscall mmap");
     exit( 1 );
   }
-  /* Passing in NULL for the requested mapping address gives mmap 
+  /* Passing in NULL for the requested mapping address gives mmap
    complete freedom to choose any address in memory as the base address
-   for the mapping. Since we don’t care where the file’s data ends up 
-   in memory, so long as we can access it, this is what we want. 
+   for the mapping. Since we don't care where the file's data ends up
+   in memory, so long as we can access it, this is what we want.
    Similarly, we want to map the entire file, so we set the offset to zero.*/
 
   // *arr now behaves like a standard array of int64_t.
@@ -223,11 +234,88 @@ int quicksort( int64_t *arr, unsigned long start, unsigned long end, unsigned lo
 
   // Recursively sort the left and right partitions
   int left_success, right_success;
-  // TODO: modify this code so that the recursive calls execute in child processes
-  left_success = quicksort( arr, start, mid, par_threshold );
-  right_success = quicksort( arr, mid + 1, end, par_threshold );
+
+  Child left, right;
+  left = quicksort_subproc( arr, start, mid, par_threshold );
+  right = quicksort_subproc( arr, mid + 1, end, par_threshold );
+
+  if (left.created_success) {
+    quicksort_wait( &left );
+  } 
+  if (right.created_success) {
+    quicksort_wait( &right );
+  }
+
+  left_success = quicksort_check_success( &left );
+  right_success = quicksort_check_success( &right );
 
   return left_success && right_success;
 }
+
+Child quicksort_subproc( int64_t *arr, unsigned long start, unsigned long end, unsigned long par_threshold ) {
+  pid_t child_pid = fork();
+  Child child;
+  // The fork is successful
+  // if this is child process: 
+  if ( child_pid == 0 ) {
+    // What to execute in child
+    int success_sort = quicksort( arr, start, end, par_threshold );
+
+    if ( success_sort ) {
+      exit( 0 );
+    }
+    // the work failed
+    else{
+      exit( 1 );
+    }
+
+  // The fork failed
+  } else if ( child_pid < 0 ) {
+    child.created_success = 0;
+
+  // if this is parent process, we only manage the child struct
+  } else {
+    child.created_success = 1;
+    child.pid = child_pid;
+  }
+  return child;
+
+}
+
+void quicksort_wait( Child *child ) {
+  int result, wstatus;
+
+  // wait for child to finish and get its exit status, we check for success outside of this method
+  result = waitpid( child->pid, &wstatus, 0 );
+
+  if ( result < 0 ) {
+    // child wait failed
+    child->waited_success = 0;
+  } else {
+    // check status of child
+    if ( !WIFEXITED( wstatus ) ) {
+      // child did not exit normally (e.g., it was terminated by a signal)
+      child->waited_success = 0;
+    } else if ( WEXITSTATUS( wstatus ) != 0 ) {
+      // child exited with a non-zero exit code
+      child->waited_success = 0;
+    } else {
+      // child exited with exit code zero (it was successful)
+      child->waited_success = 1;
+    }
+  }
+} 
+
+int quicksort_check_success( Child *child ) {
+  if ( !child->created_success ) {
+    return 0;
+  }
+  if ( !child->waited_success ) {
+    return 0;
+  }
+  return 1;
+}
+
+
 
 // TODO: define additional helper functions if needed
